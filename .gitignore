@@ -2,55 +2,41 @@
 # Dependencies
 node_modules/
 
-# Environment variables
-.env
-.env.local
-.env.*
-
-# Build outputs
+# Build artifacts
 dist/
-build/
-target/
 
-# Logs
-*.log
+# Environment variables
+.env.local
 
-# Editor/IDE
+# IDE files
 .vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
 
-# Python
+# Python cache (if any Python files were detected, though not in this case)
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-venv/
-.venv/
-.env
-.env.local
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
+# Logs
+*.log
 
-# System files
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# MyPy
-.mypy_cache/
+# Source maps (from build artifacts)
+*.map
 
-# PyTest
-.pytest_cache/
+# Coverage reports
+coverage/
+*.coverage
+htmlcov/
 
-# Supabase
-.supabase/
+# Local configuration
+*.local
 
-# Vercel
-.vercel/
 ```
