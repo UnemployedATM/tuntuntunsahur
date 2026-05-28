@@ -27,6 +27,18 @@ export const AppProvider = ({ children }) => {
 
   // Add or update a session
   const addSession = (sessionData) => {
+    // Check daily capacity
+    const sessionsOnDate = sessions.filter(s => {
+      const sessionDate = new Date(s.dateTime).toISOString().split('T')[0];
+      const newDate = new Date(sessionData.dateTime).toISOString().split('T')[0];
+      return sessionDate === newDate && s.status !== 'cancelled';
+    });
+
+    if (sessionsOnDate.length >= settings.dailyCapacity) {
+      alert(`Error: Daily capacity reached! Maximum ${settings.dailyCapacity} clients allowed per day.`);
+      return null;
+    }
+
     const newSession = {
       id: `sess${Date.now()}`,
       ...sessionData,
@@ -45,6 +57,18 @@ export const AppProvider = ({ children }) => {
 
   // Reschedule a session
   const rescheduleSession = (sessionId, newDateTime, reason = '') => {
+    // Check capacity for new date
+    const sessionsOnNewDate = sessions.filter(s => {
+      const sessionDate = new Date(s.dateTime).toISOString().split('T')[0];
+      const targetDate = new Date(newDateTime).toISOString().split('T')[0];
+      return sessionDate === targetDate && s.status !== 'cancelled' && s.id !== sessionId;
+    });
+
+    if (sessionsOnNewDate.length >= settings.dailyCapacity) {
+      alert(`Cannot reschedule: Daily capacity for ${new Date(newDateTime).toLocaleDateString()} is full (${settings.dailyCapacity} clients max).`);
+      return false;
+    }
+
     setSessions(sessions.map(session => {
       if (session.id === sessionId) {
         return {
@@ -58,6 +82,7 @@ export const AppProvider = ({ children }) => {
       }
       return session;
     }));
+    return true;
   };
 
   // Cancel a session

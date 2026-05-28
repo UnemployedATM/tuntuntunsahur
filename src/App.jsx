@@ -18,16 +18,16 @@ const Navigation = () => {
   ];
 
   return (
-    <nav className="w-64 bg-gray-900 text-white min-h-screen p-4 fixed left-0 top-0">
-      <div className="mb-8">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <LayoutDashboard className="w-6 h-6" />
-          Studio Booking
+    <nav className="w-72 bg-[#111111] border-r border-[rgba(255,255,255,0.08)] min-h-screen p-6 fixed left-0 top-0 backdrop-blur-sm">
+      <div className="mb-10">
+        <h1 className="text-2xl font-semibold flex items-center gap-3 text-white">
+          <LayoutDashboard className="w-7 h-7" />
+          <span className="serif">Studio</span> Booking
         </h1>
-        <p className="text-xs text-gray-400 mt-1">Management System</p>
+        <p className="text-xs text-[#a0a0a0] mt-2 tracking-wide">Management System</p>
       </div>
       
-      <ul className="space-y-2">
+      <ul className="space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -36,22 +36,22 @@ const Navigation = () => {
             <li key={item.path}>
               <Link
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    ? 'bg-[#FF4B2B] text-white shadow-lg shadow-[#FF4B2B]/20'
+                    : 'text-[#a0a0a0] hover:bg-[#1f1f1f] hover:text-white'
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                <span>{item.label}</span>
+                <span className="font-medium">{item.label}</span>
               </Link>
             </li>
           );
         })}
       </ul>
       
-      <div className="absolute bottom-4 left-4 right-4">
-        <div className="p-3 bg-gray-800 rounded-lg text-xs text-gray-400">
+      <div className="absolute bottom-6 left-6 right-6">
+        <div className="p-4 bg-[#161616] rounded-xl text-xs text-[#666666] border border-[rgba(255,255,255,0.08)]">
           <p>© 2024 Studio Booking</p>
           <p className="mt-1">v1.0.0</p>
         </div>
@@ -62,9 +62,9 @@ const Navigation = () => {
 
 const MainLayout = ({ children }) => {
   return (
-    <div className="flex">
+    <div className="flex bg-[#0a0a0a] min-h-screen">
       <Navigation />
-      <main className="ml-64 flex-1">
+      <main className="ml-72 flex-1 p-8">
         {children}
       </main>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, UserCheck, UserX, Plus, Edit2 } from 'lucide-react';
+import { Users, UserCheck, UserX, Plus, Edit2, Calendar } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
 const Staff = () => {
@@ -7,6 +7,7 @@ const Staff = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [cancelationHours, setCancelationHours] = useState(settings.cancelationPolicyHours.toString());
   const [followUpDays, setFollowUpDays] = useState(settings.followUpReminderDays.toString());
+  const [dailyCapacity, setDailyCapacity] = useState(settings.dailyCapacity.toString());
 
   const availableCount = staff.filter(s => s.available).length;
   const clientsNeedingFollowUp = getClientsNeedingFollowUp();
@@ -14,7 +15,8 @@ const Staff = () => {
   const handleSaveSettings = () => {
     updateSettings({
       cancelationPolicyHours: parseInt(cancelationHours) || 24,
-      followUpReminderDays: parseInt(followUpDays) || 7
+      followUpReminderDays: parseInt(followUpDays) || 7,
+      dailyCapacity: parseInt(dailyCapacity) || 8
     });
     setShowSettings(false);
   };
@@ -43,8 +45,25 @@ const Staff = () => {
         {/* Settings Panel */}
         {showSettings && (
           <div className="mb-6 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4">Studio Settings</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h2 className="text-xl font-semibold mb-4">Studio Configuration</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Daily Capacity (max clients per day)
+                </label>
+                <input
+                  type="number"
+                  value={dailyCapacity}
+                  onChange={(e) => setDailyCapacity(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  min="1"
+                  max="50"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Maximum number of sessions allowed per day
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Cancelation Policy (hours before session)
@@ -179,8 +198,15 @@ const Staff = () => {
 
         {/* Current Settings Display */}
         <div className="mt-6 bg-white p-4 rounded-xl shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-2">Current Studio Policies</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+            <Edit2 className="w-5 h-5" />
+            Current Studio Configuration
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span><strong>Daily Capacity:</strong> {settings.dailyCapacity} clients max per day</span>
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               <span><strong>Cancelation with refund:</strong> Up to {settings.cancelationPolicyHours} hours before session</span>
