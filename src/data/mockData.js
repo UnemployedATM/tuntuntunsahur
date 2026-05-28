@@ -123,5 +123,6 @@ export const mockSessions = [
 
 export const mockSettings = {
   cancelationPolicyHours: 24,
-  followUpReminderDays: 7
+  followUpReminderDays: 7,
+  dailyCapacity: 8 // Max clients per day
 };
