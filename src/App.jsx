@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Calendar as CalendarIcon, Map, Users, AlertTriangle, LayoutDashboard } from 'lucide-react';
 import { AppProvider } from './context/AppContext';
+import Landing from './pages/Landing';
 import Calendar from './pages/Calendar';
 import StudioMap from './pages/StudioMap';
 import Staff from './pages/Staff';
@@ -75,14 +76,13 @@ function App() {
   return (
     <AppProvider>
       <Router>
-        <MainLayout>
-          <Routes>
-            <Route path="/" element={<Calendar />} />
-            <Route path="/studio-map" element={<StudioMap />} />
-            <Route path="/staff" element={<Staff />} />
-            <Route path="/complaints" element={<Complaints />} />
-          </Routes>
-        </MainLayout>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/calendar" element={<MainLayout><Calendar /></MainLayout>} />
+          <Route path="/studio-map" element={<MainLayout><StudioMap /></MainLayout>} />
+          <Route path="/staff" element={<MainLayout><Staff /></MainLayout>} />
+          <Route path="/complaints" element={<MainLayout><Complaints /></MainLayout>} />
+        </Routes>
       </Router>
     </AppProvider>
   );
