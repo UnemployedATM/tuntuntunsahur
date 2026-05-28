@@ -2,33 +2,38 @@
 # Dependencies
 node_modules/
 
-# Build artifacts
-dist/
-build/
-target/
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
 # Environment variables
 .env
 .env.local
 .env.*
 
-# IDE files
+# Build outputs
+dist/
+build/
+target/
+
+# Logs
+*.log
+
+# Editor/IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# Logs
-*.log
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
+.env.local
 
-# Coverage reports
+# Coverage
 coverage/
 htmlcov/
 .coverage
@@ -37,9 +42,15 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# MyPy cache
+# MyPy
 .mypy_cache/
 
-# Pytest cache
+# PyTest
 .pytest_cache/
+
+# Supabase
+.supabase/
+
+# Vercel
+.vercel/
 ```
