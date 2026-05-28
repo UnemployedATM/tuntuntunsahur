@@ -5,132 +5,57 @@ node_modules/
 # Build outputs
 dist/
 build/
-.next/
-out/
+target/
 
 # Environment variables
 .env
 .env.local
 .env.*
 
-# IDE and editor files
+# IDE specific
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS generated files
-.DS_Store
-Thumbs.db
-
 # Logs
 *.log
-
-# Coverage
-coverage/
-htmlcov/
 
 # Python specific
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/modules/
+*.sublime-workspace
 .pytest_cache/
 .mypy_cache/
-.coverage
-
-# Node.js specific
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Compiled CSS/JS
-*.min.js
-*.min.css
-
-# Distribution / packaging
-*.tar.gz
-*.zip
-
-# Testing
-*.coverage
-
-# Local development
-.env.local
-
-# Vite specific
-.vite/
 
 # Temporary files
 *.tmp
 *.temp
-
-# Lock files (already in package-lock.json but good to have)
-yarn.lock
-pnpm-lock.yaml
-
-# Map files
-*.map
-
-# Browser specific
-*.orig
-
-# Backup files
 *~
 
-# Hidden files and directories (except .gitignore itself)
-.*
-!.gitignore
-
-# TypeScript
-*.tsbuildinfo
-
-# React / JSX
-*.jsx
-*.tsx
-
-# Source maps
-*.map
-
-# Bundle files
-bundle.js
-bundle.css
-
-# Development
-.nyc_output/
-
-# Babel
-.babelrc
-.babelrc.js
-
-# ESLint
-.eslintcache
-
-# Prettier
-.prettierrc
-.prettierignore
-
-# PostCSS
-.postcssrc
-
-# Tailwind
-.tailwindrc
-
-# Runtime
-.rts2_cache_cjs/
-.rts2_cache_esm/
-.rts2_cache_umd/
-
-# Sucrase
-.sucrase/
-
-# Rolldown
-.rolldown/
-
-# Date-fns (since it's in node_modules and large)
-node_modules/date-fns/
-
-# Lucide React (since it's in node_modules and large)
-node_modules/lucide-react/
-
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 ```
