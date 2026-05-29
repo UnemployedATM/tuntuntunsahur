@@ -28,6 +28,12 @@
    - **anon/public key** (long string starting with `eyJ...`)
 
 ### 1.3 Create Database Tables
+
+> ⚠️ **The script rebuilds the studio tables.** `supabase_schema.sql` runs
+> `drop table if exists ...` first, so any existing rows in the studio tables are
+> removed and replaced with a clean schema plus demo seed data. It is safe to
+> re-run.
+
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Click "New Query"
 3. Copy the entire contents of `supabase_schema.sql` from this project
@@ -35,21 +41,28 @@
 5. Click "Run" or press `Ctrl+Enter` (Cmd+Enter on Mac)
 6. Verify all tables are created successfully
 
-### 1.4 Add Initial Data (Optional)
-You can add initial staff members and equipment via the SQL Editor:
+### 1.4 Initial Data
+
+The schema already seeds demo clients, staff, equipment, complaints, and the
+default settings document — so the app is populated the moment you open it. No
+extra steps are needed.
+
+To add more rows by hand later, match the real columns (note that `id` is a
+plain text value you supply):
 
 ```sql
--- Add initial staff
-INSERT INTO staff (name, role, is_available) VALUES
-('Admin User', 'Manager', true),
-('Staff Member 1', 'Receptionist', true);
+-- Add staff
+INSERT INTO staff (id, name, role, is_available) VALUES
+  ('staff-100', 'Laura Pérez', 'Recepción', true);
 
--- Add initial equipment
-INSERT INTO equipment (name, type, total_quantity, available_quantity, status) VALUES
-('Yoga Mat', 'mat', 20, 20, 'available'),
-('Resistance Band', 'accessory', 15, 15, 'available'),
-('Foam Roller', 'recovery', 10, 10, 'available');
+-- Add equipment
+INSERT INTO equipment (id, name, total_count, available_count, in_repair_count) VALUES
+  ('equip-100', 'Yoga Mat', 20, 20, 0);
 ```
+
+In normal use you won't need this — staff and equipment are managed from the
+app's **Staff** and **Estudio** tabs, and clients are captured automatically
+when you book a session.
 
 ---
 
@@ -63,6 +76,11 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
 2. Replace the placeholder values with your actual Supabase credentials
+
+> ℹ️ **No credentials? The app still runs.** If these variables are missing or
+> invalid, the app automatically falls back to **localStorage** (data is kept only
+> in that browser) instead of failing to load. Set valid credentials to use the
+> shared Supabase database, and restart the dev server after editing `.env`.
 
 ### 2.2 Vercel Deployment
 1. Go to your Vercel project settings
@@ -176,15 +194,31 @@ git push -u origin main
 
 | Table | Purpose |
 |-------|---------|
-| `clients` | Stores client information (reusable) |
-| `equipment` | Studio equipment inventory and status |
-| `staff` | Staff members and availability |
-| `settings` | App configuration (cancellation policy, capacity, etc.) |
-| `sessions` | Booking sessions with all details |
-| `complaints` | Client complaints and resolution tracking |
-| `follow_ups` | Automated follow-up reminders |
+| `clients` | Reusable client directory (auto-captured from bookings) |
+| `staff` | Staff members, roles, and availability |
+| `equipment` | Studio inventory: total / available / in-repair counts |
+| `sessions` | Bookings — client info is denormalized onto each row |
+| `complaints` | Client complaints with category, severity, and status |
+| `settings` | Single JSON document (id = `singleton`) holding all app config |
+
+**Conventions:** every table uses a **TEXT** primary key (the app supplies its
+own ids), and session date/times are stored as **TEXT** wall-clock strings
+(e.g. `2026-05-28T09:00:00`) so they round-trip with no timezone shifting.
 
 ---
+
+## 🔒 Security Note (Read Before Production)
+
+The schema enables Row Level Security but ships with **allow-all** policies, and
+the Supabase **anon key is bundled into the browser build**. In this default
+configuration **anyone who can load the site can read and write the entire
+database.** That's acceptable for a private/internal demo, but before exposing
+this publicly you should:
+
+1. Add **Supabase Auth** (e.g. email/password for staff).
+2. Replace the `"studio allow all"` policies with role-scoped policies that only
+   permit authenticated staff.
+3. Never commit your `.env` — set credentials only in Vercel's env settings.
 
 ## 🎯 Next Steps After Deployment
 

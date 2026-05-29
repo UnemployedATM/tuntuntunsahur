@@ -1,169 +1,158 @@
--- Studio Booking App Database Schema for Supabase
+-- ============================================================================
+-- Studio Booking App — Supabase schema
+-- ----------------------------------------------------------------------------
+-- This script REBUILDS the studio tables to match the application's data model
+-- exactly (see src/App.jsx + src/lib/db.js). Running it DROPS and recreates the
+-- studio tables, so any existing rows in them are removed. It is safe to run
+-- more than once.
+--
+-- Design notes:
+--   * Primary keys are TEXT. The app generates its own ids (e.g. "1717000000000"),
+--     so text PKs let rows round-trip without uuid remapping.
+--   * Date/time fields are stored as TEXT. The app stores naive local wall-clock
+--     strings ("2026-05-28T09:00:00"); text preserves them exactly with no
+--     timezone shifting.
+--   * `settings` is a single JSON row (id = 'singleton'), matching the nested
+--     settings object the app uses (including the closed_weekdays / exempt_days
+--     arrays).
+--   * There is no `follow_ups` table: the app has no follow-up feature wired.
+-- ============================================================================
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Clean slate -----------------------------------------------------------------
+drop table if exists follow_ups cascade;   -- legacy / unused by the app
+drop table if exists complaints cascade;
+drop table if exists sessions   cascade;
+drop table if exists settings   cascade;
+drop table if exists equipment  cascade;
+drop table if exists staff      cascade;
+drop table if exists clients    cascade;
 
--- 1. Clients Table (reusable client data)
-CREATE TABLE clients (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
-  cellphone TEXT UNIQUE NOT NULL,
-  age INTEGER,
-  special_needs TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Clients (reusable client directory; auto-captured from bookings) ------------
+create table clients (
+  id            text primary key,
+  name          text not null,
+  cellphone     text,
+  age           integer,
+  special_needs text
 );
 
--- 2. Equipment Table (studio map)
-CREATE TABLE equipment (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL,
-  total_quantity INTEGER DEFAULT 1,
-  available_quantity INTEGER DEFAULT 1,
-  in_reparation INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'available' CHECK (status IN ('available', 'partial', 'unavailable')),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Staff -----------------------------------------------------------------------
+create table staff (
+  id           text primary key,
+  name         text not null,
+  role         text,
+  is_available boolean not null default true
 );
 
--- 3. Staff Table
-CREATE TABLE staff (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
-  role TEXT,
-  is_available BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Equipment (studio inventory) ------------------------------------------------
+create table equipment (
+  id              text primary key,
+  name            text not null,
+  total_count     integer not null default 0,
+  available_count integer not null default 0,
+  in_repair_count integer not null default 0
 );
 
--- 4. Settings Table (configuration)
-CREATE TABLE settings (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  cancellation_policy_hours INTEGER DEFAULT 24,
-  follow_up_interval_days INTEGER DEFAULT 7,
-  daily_capacity INTEGER DEFAULT 10,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Sessions / bookings ---------------------------------------------------------
+-- Client info is denormalized onto the booking (the app does not use FKs).
+create table sessions (
+  id                  text primary key,
+  client_name         text,
+  cellphone           text,
+  age                 integer,
+  special_needs       text,
+  needs_towel         boolean not null default false,
+  needs_faja          boolean not null default false,
+  needs_water         boolean not null default false,
+  brings_own          boolean not null default false,
+  start_time          text not null,   -- naive local "yyyy-MM-ddTHH:00:00"
+  end_time            text,
+  status              text not null default 'booked',  -- booked | attended | no_show
+  refund_eligible     boolean not null default true,
+  original_start_time text,
+  reschedule_history  jsonb not null default '[]'::jsonb,
+  created_at          timestamptz not null default now()
 );
 
--- Insert default settings
-INSERT INTO settings (cancellation_policy_hours, follow_up_interval_days, daily_capacity) 
-VALUES (24, 7, 10);
-
--- 5. Sessions/Bookings Table
-CREATE TABLE sessions (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
-  staff_id UUID REFERENCES staff(id),
-  date DATE NOT NULL,
-  time TIME NOT NULL,
-  needs_towel BOOLEAN DEFAULT false,
-  needs_faja BOOLEAN DEFAULT false,
-  needs_water BOOLEAN DEFAULT false,
-  brings_own BOOLEAN DEFAULT false,
-  status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'attended', 'not_attended', 'cancelled', 'rescheduled')),
-  attended BOOLEAN,
-  communicated BOOLEAN,
-  original_date DATE,
-  original_time TIME,
-  reschedule_history JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Complaints ------------------------------------------------------------------
+create table complaints (
+  id          text primary key,
+  client_name text,
+  category    text,   -- Servicio | Limpieza | Equipo | Staff | Instalaciones | Otro
+  severity    text,   -- Baja | Media | Alta
+  description text,
+  status      text not null default 'open',  -- open | resolved
+  created_at  text,   -- ISO string set by the app
+  resolved_at text
 );
 
--- 6. Complaints Table
-CREATE TABLE complaints (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
-  description TEXT NOT NULL,
-  is_solved BOOLEAN DEFAULT false,
-  resolution_time_hours INTEGER,
-  resolution_notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Settings (single JSON document) ---------------------------------------------
+create table settings (
+  id   text primary key default 'singleton',
+  data jsonb not null
 );
 
--- 7. Follow-ups Table (reminders)
-CREATE TABLE follow_ups (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
-  session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
-  due_date DATE NOT NULL,
-  is_completed BOOLEAN DEFAULT false,
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- Helpful indexes -------------------------------------------------------------
+create index idx_sessions_start_time on sessions (start_time);
+create index idx_sessions_status     on sessions (status);
+create index idx_complaints_status   on complaints (status);
 
--- Indexes for performance
-CREATE INDEX idx_sessions_date ON sessions(date);
-CREATE INDEX idx_sessions_client_id ON sessions(client_id);
-CREATE INDEX idx_sessions_status ON sessions(status);
-CREATE INDEX idx_clients_cellphone ON clients(cellphone);
-CREATE INDEX idx_complaints_is_solved ON complaints(is_solved);
-CREATE INDEX idx_follow_ups_due_date ON follow_ups(due_date);
-CREATE INDEX idx_follow_ups_is_completed ON follow_ups(is_completed);
+-- ============================================================================
+-- Seed data (mirrors the in-app demo data in src/lib/db.js)
+-- ============================================================================
+insert into clients (id, name, cellphone, age, special_needs) values
+  ('1', 'Ana García',   '5512345678', 28, 'Ninguna'),
+  ('2', 'Carlos López', '5587654321', 34, 'Alergia al látex')
+on conflict (id) do nothing;
 
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+insert into staff (id, name, role, is_available) values
+  ('1', 'Admin User',   'Manager',    true),
+  ('2', 'Instructor A', 'Instructor', true)
+on conflict (id) do nothing;
 
--- Triggers for auto-updating updated_at
-CREATE TRIGGER update_clients_updated_at BEFORE UPDATE ON clients
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+insert into equipment (id, name, total_count, available_count, in_repair_count) values
+  ('1', 'Reformer',    5, 3, 2),
+  ('2', 'Cadillac',    2, 2, 0),
+  ('3', 'Wunda Chair', 3, 1, 2)
+on conflict (id) do nothing;
 
-CREATE TRIGGER update_equipment_updated_at BEFORE UPDATE ON equipment
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+insert into complaints (id, client_name, category, severity, description, status, created_at, resolved_at) values
+  ('c1', 'Ana García',   'Equipo',   'Media', 'El Reformer 3 hace ruido al deslizar el carro.', 'open',     '2026-05-26T10:00:00', null),
+  ('c2', 'Carlos López', 'Limpieza', 'Baja',  'Vestidor sin toallas limpias por la mañana.',    'resolved', '2026-05-22T09:30:00', '2026-05-22T14:00:00')
+on conflict (id) do nothing;
 
-CREATE TRIGGER update_staff_updated_at BEFORE UPDATE ON staff
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+insert into settings (id, data) values
+  ('singleton', '{
+    "daily_capacity": 10,
+    "hourly_capacity": 4,
+    "cancellation_policy_hours": 24,
+    "follow_up_interval_days": 7,
+    "open_hour": 7,
+    "close_hour": 19,
+    "closed_weekdays": [0],
+    "exempt_days": []
+  }'::jsonb)
+on conflict (id) do nothing;
 
-CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- ============================================================================
+-- Row Level Security
+-- ----------------------------------------------------------------------------
+-- WARNING: these policies allow ANYONE with the public anon key full read/write
+-- access. The anon key ships in the browser bundle, so in this configuration
+-- the database is effectively open to anyone who can load the site. This is
+-- acceptable for a private/internal demo, but BEFORE going to production you
+-- should add Supabase Auth and restrict these policies to authenticated staff.
+-- ============================================================================
+alter table clients    enable row level security;
+alter table staff      enable row level security;
+alter table equipment  enable row level security;
+alter table sessions   enable row level security;
+alter table complaints enable row level security;
+alter table settings   enable row level security;
 
-CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_complaints_updated_at BEFORE UPDATE ON complaints
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_follow_ups_updated_at BEFORE UPDATE ON follow_ups
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Row Level Security (RLS) - Enable for all tables
-ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE equipment ENABLE ROW LEVEL SECURITY;
-ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
-ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE complaints ENABLE ROW LEVEL SECURITY;
-ALTER TABLE follow_ups ENABLE ROW LEVEL SECURITY;
-
--- Policies (allow all operations for authenticated users for now)
--- In production, you should refine these policies based on roles
-CREATE POLICY "Allow all operations on clients" ON clients
-  FOR ALL USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on equipment" ON equipment
-  FOR ALL USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on staff" ON staff
-  FOR ALL USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on settings" ON settings
-  FOR ALL USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on sessions" ON sessions
-  FOR ALL USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on complaints" ON complaints
-  FOR ALL USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on follow_ups" ON follow_ups
-  FOR ALL USING (true) WITH CHECK (true);
+create policy "studio allow all" on clients    for all using (true) with check (true);
+create policy "studio allow all" on staff      for all using (true) with check (true);
+create policy "studio allow all" on equipment  for all using (true) with check (true);
+create policy "studio allow all" on sessions   for all using (true) with check (true);
+create policy "studio allow all" on complaints for all using (true) with check (true);
+create policy "studio allow all" on settings   for all using (true) with check (true);

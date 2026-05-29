@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
   Calendar as CalIcon, Map, Users, AlertTriangle,
@@ -7,52 +7,11 @@ import {
 } from 'lucide-react';
 import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO, getHours, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { store, INITIAL_SETTINGS, DEFAULT_HOURLY_CAPACITY } from './lib/db';
 
-// --- Persistence: localStorage-backed state so staff data survives refresh ---
-const usePersistentState = (key, initial) => {
-  const [value, setValue] = useState(() => {
-    try {
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : initial;
-    } catch {
-      return initial;
-    }
-  });
-  useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota / private mode */ }
-  }, [key, value]);
-  return [value, setValue];
-};
-
-// --- Mock Data ---
-const MOCK_CLIENTS = [
-  { id: '1', name: 'Ana García', cellphone: '5512345678', age: 28, special_needs: 'Ninguna' },
-  { id: '2', name: 'Carlos López', cellphone: '5587654321', age: 34, special_needs: 'Alergia al látex' },
-];
-
-const MOCK_STAFF = [
-  { id: '1', name: 'Admin User', role: 'Manager', is_available: true },
-  { id: '2', name: 'Instructor A', role: 'Instructor', is_available: true },
-];
-
-const MOCK_EQUIPMENT = [
-  { id: '1', name: 'Reformer', total_count: 5, available_count: 3, in_repair_count: 2 },
-  { id: '2', name: 'Cadillac', total_count: 2, available_count: 2, in_repair_count: 0 },
-  { id: '3', name: 'Wunda Chair', total_count: 3, available_count: 1, in_repair_count: 2 },
-];
-
-const DEFAULT_HOURLY_CAPACITY = 4;
-
-const INITIAL_SETTINGS = {
-  daily_capacity: 10,
-  hourly_capacity: DEFAULT_HOURLY_CAPACITY, // max bookings allowed in a single hour slot
-  cancellation_policy_hours: 24,
-  follow_up_interval_days: 7,
-  open_hour: 7,
-  close_hour: 19,
-  closed_weekdays: [0], // 0=Dom ... 6=Sáb
-  exempt_days: [],      // specific 'yyyy-MM-dd' closures (holidays, one-offs)
-};
+// Seed data, default settings, and the persistence layer (Supabase with an
+// automatic localStorage fallback) live in ./lib/db. The studio collections and
+// their setters are provided by the useStudioData hook (defined below).
 
 // Weekday chips ordered Lun→Dom; value matches JS Date.getDay() (0=Dom).
 const WEEKDAYS = [
@@ -69,11 +28,6 @@ const isClosedDay = (day, settings) => {
 const STAFF_ROLES = ['Manager', 'Instructor', 'Recepción', 'Terapeuta', 'Limpieza'];
 const COMPLAINT_CATEGORIES = ['Servicio', 'Limpieza', 'Equipo', 'Staff', 'Instalaciones', 'Otro'];
 const COMPLAINT_SEVERITIES = ['Baja', 'Media', 'Alta'];
-
-const MOCK_COMPLAINTS = [
-  { id: 'c1', client_name: 'Ana García', category: 'Equipo', severity: 'Media', description: 'El Reformer 3 hace ruido al deslizar el carro.', status: 'open', created_at: '2026-05-26T10:00:00', resolved_at: null },
-  { id: 'c2', client_name: 'Carlos López', category: 'Limpieza', severity: 'Baja', description: 'Vestidor sin toallas limpias por la mañana.', status: 'resolved', created_at: '2026-05-22T09:30:00', resolved_at: '2026-05-22T14:00:00' },
-];
 
 // --- Reusable UI Components (Bento Style) ---
 const Button = ({ children, onClick, variant = 'primary', className = '', type = "button", ...props }) => {
@@ -845,6 +799,107 @@ const ComplaintsView = ({ complaints, setComplaints }) => {
   );
 };
 
+// --- Data layer: load from the store (Supabase or localStorage) and expose
+// useState-style setters that transparently persist every change. ------------
+const useStudioData = () => {
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [error, setError] = useState(null);
+
+  const [clients, setClientsState] = useState([]);
+  const [staff, setStaffState] = useState([]);
+  const [equipment, setEquipmentState] = useState([]);
+  const [sessions, setSessionsState] = useState([]);
+  const [complaints, setComplaintsState] = useState([]);
+  const [settings, setSettingsState] = useState(INITIAL_SETTINGS);
+
+  // Mirror of the latest values so a setter can diff prev -> next without
+  // running side effects inside a React state updater (StrictMode-safe).
+  const ref = useRef({ clients: [], staff: [], equipment: [], sessions: [], complaints: [], settings: INITIAL_SETTINGS });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await store.loadAll();
+        if (cancelled) return;
+        const mergedSettings = { ...INITIAL_SETTINGS, ...(data.settings || {}) };
+        ref.current = {
+          clients: data.clients, staff: data.staff, equipment: data.equipment,
+          sessions: data.sessions, complaints: data.complaints, settings: mergedSettings,
+        };
+        setClientsState(data.clients);
+        setStaffState(data.staff);
+        setEquipmentState(data.equipment);
+        setSessionsState(data.sessions);
+        setComplaintsState(data.complaints);
+        setSettingsState(mergedSettings);
+        setStatus('ready');
+      } catch (e) {
+        if (cancelled) return;
+        setError(e?.message || String(e));
+        setStatus('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Setter that accepts an array or an updater fn (like useState), updates React
+  // state, and persists the change to the store.
+  const makeSetter = (table, setState) => (updater) => {
+    const prev = ref.current[table];
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    ref.current[table] = next;
+    setState(next);
+    store.persistCollection(table, prev, next);
+  };
+
+  const setSettings = (updater) => {
+    const prev = ref.current.settings;
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    ref.current.settings = next;
+    setSettingsState(next);
+    store.saveSettings(next);
+  };
+
+  return {
+    status, error,
+    clients, setClients: makeSetter('clients', setClientsState),
+    staff, setStaff: makeSetter('staff', setStaffState),
+    equipment, setEquipment: makeSetter('equipment', setEquipmentState),
+    sessions, setSessions: makeSetter('sessions', setSessionsState),
+    complaints, setComplaints: makeSetter('complaints', setComplaintsState),
+    settings, setSettings,
+  };
+};
+
+const StudioLoading = () => (
+  <div className="flex flex-col items-center justify-center py-32 text-center gap-4">
+    <div className="w-10 h-10 rounded-full border-4 border-[var(--line)] border-t-[var(--cyan)] animate-spin"></div>
+    <p className="text-[var(--mut)] font-bold uppercase tracking-wide text-sm">Cargando datos…</p>
+  </div>
+);
+
+const StudioError = ({ message }) => (
+  <div className="max-w-xl mx-auto mt-12">
+    <Card accent="var(--orange)">
+      <div className="flex items-center gap-3 mb-4">
+        <AlertTriangle className="text-[var(--orange)]" size={28} />
+        <h3 className="text-xl font-black uppercase text-[var(--white)]">Error de conexión</h3>
+      </div>
+      <p className="text-[var(--mut)] text-sm mb-4">{message || 'No se pudieron cargar los datos.'}</p>
+      <div className="bg-[var(--card-2)] rounded-[12px] p-4 text-xs text-[var(--mut-2)] space-y-2">
+        <p className="font-bold text-[var(--white)]">Posibles causas:</p>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Las variables <code className="text-[var(--cyan)]">VITE_SUPABASE_URL</code> y <code className="text-[var(--cyan)]">VITE_SUPABASE_ANON_KEY</code> no están configuradas.</li>
+          <li>El esquema (<code className="text-[var(--cyan)]">supabase_schema.sql</code>) aún no se ejecutó en Supabase.</li>
+          <li>Las políticas RLS no permiten el acceso a las tablas.</li>
+        </ul>
+      </div>
+      <Button variant="secondary" onClick={() => window.location.reload()} className="w-full mt-4"><RotateCcw size={16}/> Reintentar</Button>
+    </Card>
+  </div>
+);
+
 // --- Layout Component (Uses useLocation safely) ---
 const MainLayout = () => {
   const location = useLocation();
@@ -856,12 +911,15 @@ const MainLayout = () => {
     return 'var(--cyan)';
   };
 
-  const [sessions, setSessions] = usePersistentState('studio_sessions', []);
-  const [settings, setSettings] = usePersistentState('studio_settings', INITIAL_SETTINGS);
-  const [clients, setClients] = usePersistentState('studio_clients', MOCK_CLIENTS);
-  const [staff, setStaff] = usePersistentState('studio_staff', MOCK_STAFF);
-  const [equipment, setEquipment] = usePersistentState('studio_equipment', MOCK_EQUIPMENT);
-  const [complaints, setComplaints] = usePersistentState('studio_complaints', MOCK_COMPLAINTS);
+  const {
+    status, error,
+    sessions, setSessions,
+    settings, setSettings,
+    clients, setClients,
+    staff, setStaff,
+    equipment, setEquipment,
+    complaints, setComplaints,
+  } = useStudioData();
 
   // Per-tab notification counts (subject of each tab; mirrors the Quejas badge).
   const openComplaints = complaints.filter(c => c.status === 'open').length;
@@ -894,13 +952,19 @@ const MainLayout = () => {
         </nav>
       </aside>
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-        <Routes>
-          <Route path="/" element={<CalendarView sessions={sessions} setSessions={setSessions} clients={clients} setClients={setClients} settings={settings} />} />
-          <Route path="/studio-map" element={<StudioMapView equipment={equipment} setEquipment={setEquipment} />} />
-          <Route path="/staff" element={<StaffView staff={staff} setStaff={setStaff} settings={settings} setSettings={setSettings} />} />
-          <Route path="/complaints" element={<ComplaintsView complaints={complaints} setComplaints={setComplaints} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        {status === 'loading' ? (
+          <StudioLoading />
+        ) : status === 'error' ? (
+          <StudioError message={error} />
+        ) : (
+          <Routes>
+            <Route path="/" element={<CalendarView sessions={sessions} setSessions={setSessions} clients={clients} setClients={setClients} settings={settings} />} />
+            <Route path="/studio-map" element={<StudioMapView equipment={equipment} setEquipment={setEquipment} />} />
+            <Route path="/staff" element={<StaffView staff={staff} setStaff={setStaff} settings={settings} setSettings={setSettings} />} />
+            <Route path="/complaints" element={<ComplaintsView complaints={complaints} setComplaints={setComplaints} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        )}
       </main>
     </div>
   );
